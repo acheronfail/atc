@@ -77,6 +77,8 @@ class Terminal {
       const [aircraftId, cmd, cmdData] = this.game.command;
       switch (char) {
         case '\x03':
+        case '\x04':
+        case '\x1b':
           return sendInput({ type: 'exit' });
         case '\r':
           return sendInput({ type: cmdData ? 'send' : 'tick' });
@@ -403,71 +405,13 @@ function move(x: number, y: number, heading: Heading): [number, number] {
 //
 
 {
-  // NOTE: the borders add extra rows/cols
-  const map = createMap(30, 21, {
-    tickRate: 2,
-    spawnRate: 5,
-    exits: [
-      [12, 0, Heading.South],
-      [29, 0, Heading.SouthWest],
-      [29, 7, Heading.West],
-      [29, 17, Heading.West],
-      [9, 20, Heading.NorthEast],
-      [0, 13, Heading.East],
-      [0, 7, Heading.East],
-      [0, 0, Heading.SouthEast],
-    ],
-    airports: [
-      [20, 15, Direction.Up],
-      [20, 18, Direction.Right],
-    ],
-    beacons: [
-      [12, 7],
-      [12, 17],
-    ],
-    paths: [
-      [
-        [1, 1],
-        [6, 6],
-      ],
-      [
-        [12, 1],
-        [12, 6],
-      ],
-      [
-        [13, 7],
-        [28, 7],
-      ],
-      [
-        [28, 1],
-        [13, 16],
-      ],
-      [
-        [1, 13],
-        [11, 13],
-      ],
-      [
-        [12, 8],
-        [12, 16],
-      ],
-      [
-        [11, 18],
-        [10, 19],
-      ],
-      [
-        [13, 17],
-        [28, 17],
-      ],
-      [
-        [1, 7],
-        [11, 7],
-      ],
-    ],
-  });
+  const mapInfo = JSON.parse(new TextDecoder().decode(Deno.readFileSync('map.json')));
+  const map = createMap(30, 21, mapInfo);
 
   // TODO: spawn random aircrafts (from exits, along paths) increasingly
   const aircrafts: Aircraft[] = [];
 
+  // TODO: re-factor so ui can be swapped out
   const game: Game = { tick: 0, safe: 0, command: [], map, lastTick: Date.now() };
   const ui = new Terminal(game);
 
