@@ -11,6 +11,7 @@ enum Direction {
   Right = '>',
 }
 
+const headingCount = 8;
 enum Heading {
   North,
   NorthEast,
@@ -21,7 +22,6 @@ enum Heading {
   West,
   NorthWest,
 }
-const headingCount = Object.values(Heading).length;
 
 const headingToCharacter: Record<Heading, string> = {
   [Heading.North]: 'w',
