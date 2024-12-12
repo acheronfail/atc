@@ -58,10 +58,19 @@ interface AircraftBase {
   destination: { type: 'airport'; id: number } | { type: 'exit'; id: number };
   command: {
     turn?: Heading;
-    altitude?: number
+    altitude?: number;
   };
 }
-type Aircraft = (AircraftBase & { type: 'prop' }) | (AircraftBase & { type: 'jet' });
+
+interface PropAircraft extends AircraftBase {
+  type: 'prop';
+}
+
+interface JetAircraft extends AircraftBase {
+  type: 'jet';
+}
+
+type Aircraft = PropAircraft | JetAircraft;
 
 type Event = { type: 'tick' } | { type: 'exit' } | { type: 'send' } | { type: 'draw' };
 
@@ -73,21 +82,21 @@ type Command =
   | [string /* aircraft id */, 'altitude']
   | [string /* aircraft id */, 'altitude', { altitude: number; text: string }];
 
-interface Game {
+interface GameState {
+  failure?: string;
   tick: number;
   safe: number;
   command: Command;
   lastTick: number;
-  map: GameMap;
-  failure?: string;
+  tickRate: number;
 }
 
 class Terminal {
   private readonly inputEvents: EventEmitter;
-  private readonly game: Game;
+  private readonly state: GameState;
 
-  constructor(game: Game) {
-    this.game = game;
+  constructor(state: GameState) {
+    this.state = state;
     process.stdin.setEncoding('utf8');
     process.stdin.setRawMode(true);
 
@@ -95,7 +104,7 @@ class Terminal {
     process.stdin.on('data', (char: string) => {
       const sendInput = (input: Event) => this.inputEvents.emit('input', input);
 
-      const [aircraftId, cmd, cmdData] = this.game.command;
+      const [aircraftId, cmd, cmdData] = this.state.command;
       switch (char) {
         case '\x03':
         case '\x04':
@@ -104,13 +113,13 @@ class Terminal {
         case '\r':
           return sendInput({ type: cmdData ? 'send' : 'tick' });
         case '\x7f':
-          this.game.command.pop();
+          this.state.command.pop();
           return sendInput({ type: 'draw' });
       }
 
       if (!aircraftId) {
         if (char.charCodeAt(0) >= 97 && char.charCodeAt(0) <= 122) {
-          this.game.command = [char];
+          this.state.command = [char];
           return sendInput({ type: 'draw' });
         }
       }
@@ -118,10 +127,10 @@ class Terminal {
       if (aircraftId && !cmd) {
         switch (char) {
           case 't':
-            this.game.command = [aircraftId, 'turn'];
+            this.state.command = [aircraftId, 'turn'];
             break;
           case 'a':
-            this.game.command = [aircraftId, 'altitude'];
+            this.state.command = [aircraftId, 'altitude'];
             break;
         }
 
@@ -132,7 +141,7 @@ class Terminal {
         if (cmd == 'turn') {
           const heading = characterToHeading[char];
           if (heading) {
-            this.game.command = [this.game.command[0], 'turn', { text: headingNameMap[heading], heading }];
+            this.state.command = [this.state.command[0], 'turn', { text: headingNameMap[heading], heading }];
           }
 
           return sendInput({ type: 'draw' });
@@ -151,7 +160,11 @@ class Terminal {
             case '8':
             case '9': {
               const altitude = parseInt(char);
-              this.game.command = [this.game.command[0], 'altitude', { text: (altitude * 1000).toString(), altitude }];
+              this.state.command = [
+                this.state.command[0],
+                'altitude',
+                { text: (altitude * 1000).toString(), altitude },
+              ];
             }
           }
           return sendInput({ type: 'draw' });
@@ -169,7 +182,7 @@ class Terminal {
   }
 
   nextEvent(): Promise<Event> {
-    const timeToNextTick = this.game.map.info.tickRate * 1000 - (Date.now() - this.game.lastTick);
+    const timeToNextTick = this.state.tickRate * 1000 - (Date.now() - this.state.lastTick);
     return Promise.race([
       new Promise<Event>((resolve) => setTimeout(() => resolve({ type: 'tick' }), timeToNextTick)),
       new Promise<Event>((resolve) => this.inputEvents.once('input', resolve)),
@@ -230,7 +243,7 @@ class Terminal {
     // sidebar
     const barX = grid.x * xScale;
     process.stdout.cursorTo(barX, 0);
-    process.stdout.write(`time: ${this.game.tick} safe: ${this.game.safe}`);
+    process.stdout.write(`time: ${this.state.tick} safe: ${this.state.safe}`);
 
     process.stdout.cursorTo(barX, 2);
     process.stdout.write('pl dt comm');
@@ -242,18 +255,18 @@ class Terminal {
       process.stdout.write(`${aircraftLabel(aircraft)} ${label}`);
 
       if (aircraft.command.altitude) {
-        process.stdout.write(` alt -> ${aircraft.command.altitude}`)
+        process.stdout.write(` alt -> ${aircraft.command.altitude}`);
       }
 
       if (aircraft.command.turn) {
-        process.stdout.write(` dir -> ${headingNameMap[aircraft.command.turn]}`)
+        process.stdout.write(` dir -> ${headingNameMap[aircraft.command.turn]}`);
       }
     });
 
     // input
     process.stdout.cursorTo(0, grid.y + 1);
     process.stdout.write('> ');
-    const [aircraftId, cmd, cmdData] = this.game.command;
+    const [aircraftId, cmd, cmdData] = this.state.command;
     if (aircraftId) {
       const aircraft = aircrafts.find((a) => a.id === aircraftId);
       process.stdout.write(`${crayon[aircraft ? 'green' : 'red'](aircraftId)}: `);
@@ -265,10 +278,10 @@ class Terminal {
       process.stdout.write(cmdData.text);
     }
 
-    if (this.game.failure) {
+    if (this.state.failure) {
       process.stdout.cursorTo(0, grid.y + 1);
       process.stdout.clearLine(0);
-      process.stdout.write(crayon.red(this.game.failure));
+      process.stdout.write(crayon.red(this.state.failure));
     }
   }
 }
@@ -356,7 +369,7 @@ function createAircraft(map: GameMap, aircrafts: Aircraft[]): Aircraft | null {
       : { type: 'exit', id: randomIndex(map.info.exits) },
     x: exitX,
     y: exitY,
-    command: {}
+    command: {},
   };
 
   return aircraft;
@@ -426,178 +439,209 @@ function move(x: number, y: number, heading: Heading): [number, number] {
 //
 // game
 //
+
+class Game {
+  // TODO: re-factor so ui can be swapped out
+  private readonly ui: Terminal;
+  private readonly state: GameState;
+  private readonly map: GameMap;
+  private readonly aircrafts: Aircraft[];
+
+  constructor(map: GameMap) {
+    this.state = { tick: 0, safe: 0, command: [], lastTick: Date.now(), tickRate: map.info.tickRate };
+    this.aircrafts = [];
+    this.map = map;
+    this.ui = new Terminal(this.state);
+  }
+
+  async run() {
+    try {
+      loop: for (;;) {
+        this.ui.draw(this.map, this.aircrafts);
+        const event = await this.ui.nextEvent();
+
+        if (this.state.failure) {
+          break loop;
+        }
+
+        switch (event.type) {
+          case 'draw':
+            continue loop;
+          case 'exit':
+            this.state.failure = 'exited';
+            break loop;
+          case 'tick':
+            break;
+          case 'send': {
+            const [aircraftId, cmd, cmdData] = this.state.command;
+            this.state.command = [];
+            assert.ok(cmd && cmdData, 'unexpected partial game command');
+
+            const aircraft = this.aircrafts.find((a) => a.id === aircraftId);
+            if (!aircraft) break;
+
+            switch (cmd) {
+              case 'altitude':
+                aircraft.command.altitude = cmdData.altitude;
+                break;
+              case 'turn':
+                aircraft.command.turn = cmdData.heading;
+                break;
+            }
+
+            continue loop;
+          }
+          default:
+            throw new Error(`Unrecognised input: ${JSON.stringify(event)}`);
+        }
+
+        this.performAircraftCommands();
+        if (!this.updateAircraftPositions()) continue loop;
+        this.spawnAircrafts();
+
+        this.state.tick++;
+        this.state.lastTick = Date.now();
+      }
+    } catch (err) {
+      this.ui.close();
+      console.error(err);
+      process.exit(1);
+    } finally {
+      this.ui.close();
+      console.log(`Game over! (${this.state.failure})`);
+      console.log(`time: ${this.state.tick} safe: ${this.state.safe}`);
+      process.exit(0);
+    }
+  }
+
+  spawnAircrafts() {
+    if (this.state.tick === 0) {
+      const aircraft = createAircraft(this.map, this.aircrafts);
+      if (aircraft) this.aircrafts.push(aircraft);
+    } else if (this.state.tick % Math.max(1, this.map.info.spawnRate - Math.floor(this.state.safe / 5)) === 0) {
+      const aircraft = createAircraft(this.map, this.aircrafts);
+      if (aircraft) this.aircrafts.push(aircraft);
+    }
+  }
+
+  performAircraftCommands() {
+    this.aircrafts.forEach((aircraft) => {
+      const { command } = aircraft;
+
+      if (command.altitude) {
+        if (command.altitude < aircraft.altitude) {
+          aircraft.altitude--;
+        } else if (command.altitude > aircraft.altitude) {
+          aircraft.altitude++;
+        }
+
+        if (command.altitude === aircraft.altitude) {
+          delete aircraft.command.altitude;
+        }
+      }
+
+      // NOTE: if planes are near the wall, and you ask them to do a 180 degree turn, they can
+      // turn straight into the wall and crash; this happens in the original `atc`, too
+      if (command.turn) {
+        const cwTurns = (command.turn - aircraft.heading + headingCount) % headingCount;
+        const ccwTurns = (aircraft.heading - command.turn + headingCount) % headingCount;
+
+        aircraft.heading += ccwTurns < cwTurns ? Math.max(-2, -ccwTurns) : Math.min(2, cwTurns);
+
+        if (aircraft.heading === command.turn) {
+          delete aircraft.command.turn;
+        }
+      }
+    });
+  }
+
+  updateAircraftPositions(): boolean {
+    for (let i = this.aircrafts.length - 1; i >= 0; --i) {
+      const aircraft = this.aircrafts[i];
+      if (this.state.tick % 2 == 0 && aircraft.type === 'prop') {
+        continue;
+      }
+
+      const [newX, newY] = move(aircraft.x, aircraft.y, aircraft.heading);
+      aircraft.x = newX;
+      aircraft.y = newY;
+
+      const cell = this.map.grid[aircraft.y][aircraft.x];
+
+      // edge conditions
+      if (aircraft.x == 0 || aircraft.y == 0 || aircraft.x == this.map.x - 1 || aircraft.y == this.map.y - 1) {
+        if (cell.exit) {
+          if (aircraft.destination.id === cell.exit.id) {
+            if (aircraft.altitude != 9) {
+              this.state.failure = `${aircraftLabel(aircraft)} exited at ${
+                aircraft.altitude * 1000
+              }ft rather than 9000ft`;
+              return false;
+            }
+
+            this.aircrafts.splice(i, 1);
+            this.state.safe++;
+            break;
+          }
+          this.state.failure = `${aircraftLabel(aircraft)} exited at E${cell.exit.id} instead of E${
+            aircraft.destination.id
+          }`;
+          return false;
+        }
+
+        this.state.failure = `${aircraftLabel(aircraft)} exited at the wrong location`;
+        return false;
+      }
+
+      // airport conditions
+      if (aircraft.altitude === 0) {
+        if (!cell.airport) {
+          this.state.failure = `${aircraftLabel(aircraft)} crashed into the ground`;
+          return false;
+        }
+
+        if (!headingMatchesDirection(aircraft.heading, cell.airport.direction)) {
+          this.state.failure = `${aircraftLabel(aircraft)} crashed into airport (wrong direction)`;
+          return false;
+        }
+
+        if (aircraft.destination.id !== cell.airport.id) {
+          this.state.failure = `${aircraftLabel(aircraft)} landed at the wrong airport`;
+          return false;
+        }
+
+        this.aircrafts.splice(i, 1);
+        this.state.safe++;
+        break;
+      }
+
+      // crash conditions
+      for (let j = this.aircrafts.length - 1; j >= 0; --j) {
+        if (i == j) continue;
+        const other = this.aircrafts[j];
+        const tooClose = Math.abs(aircraft.altitude - other.altitude) <= 3;
+        if (aircraft.x === other.x && aircraft.y === other.y && tooClose) {
+          this.state.failure = `${aircraftLabel(aircraft)} collided with ${aircraftLabel(other)}`;
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+}
+
 {
   const mapInfo: MapInfo = JSON.parse(fs.readFileSync('map.json', 'utf-8'));
-  mapInfo.exits = mapInfo.exits.map(([x, y, headingChar]) => [x, y, characterToHeading[headingChar]]);
+  mapInfo.exits = mapInfo.exits.map(([x, y, headingChar]) => {
+    if (typeof headingChar === 'string') {
+      return [x, y, characterToHeading[headingChar]];
+    }
+
+    return [x, y, headingChar];
+  });
 
   const map = createMap(30, 21, mapInfo);
-
-  const aircrafts: Aircraft[] = [];
-
-  // TODO: re-factor so ui can be swapped out
-  const game: Game = { tick: 0, safe: 0, command: [], map, lastTick: Date.now() };
-  const ui = new Terminal(game);
-
-  try {
-    loop: for (;;) {
-      ui.draw(map, aircrafts);
-      const event = await ui.nextEvent();
-
-      if (game.failure) {
-        break loop;
-      }
-
-      // handle input
-      switch (event.type) {
-        case 'draw':
-          continue loop;
-        case 'exit':
-          game.failure = 'exited';
-          break loop;
-        case 'tick':
-          break;
-        case 'send': {
-          const [aircraftId, cmd, cmdData] = game.command;
-          game.command = [];
-          assert.ok(cmd && cmdData, 'unexpected partial game command');
-
-          const aircraft = aircrafts.find((a) => a.id === aircraftId);
-          if (!aircraft) break;
-
-          switch (cmd) {
-            case 'altitude':
-              aircraft.command.altitude = cmdData.altitude;
-              break;
-            case 'turn':
-              aircraft.command.turn = cmdData.heading
-              break;
-          }
-
-          continue loop;
-        }
-        default:
-          throw new Error(`Unrecognised input: ${JSON.stringify(event)}`);
-      }
-
-      // update game state
-      aircrafts.forEach((aircraft) => {
-        const { command } = aircraft;
-
-        if (command.altitude) {
-          if (command.altitude < aircraft.altitude) {
-            aircraft.altitude--;
-          } else if (command.altitude > aircraft.altitude) {
-            aircraft.altitude++;
-          }
-
-          if (command.altitude === aircraft.altitude) {
-            delete aircraft.command.altitude;
-          }
-        }
-
-        // NOTE: if planes are near the wall, and you ask them to do a 180 degree turn, they can
-        // turn straight into the wall and crash; this happens in the original `atc`, too
-        if (command.turn) {
-          const cwTurns = (command.turn - aircraft.heading + headingCount) % headingCount;
-          const ccwTurns = (aircraft.heading - command.turn + headingCount) % headingCount;
-
-          aircraft.heading += ccwTurns < cwTurns ? Math.max(-2, -ccwTurns) : Math.min(2, cwTurns);
-
-          if (aircraft.heading === command.turn) {
-            delete aircraft.command.turn;
-          }
-        }
-      });
-
-      // update aircrafts
-      for (let i = aircrafts.length - 1; i >= 0; --i) {
-        const aircraft = aircrafts[i];
-        if (game.tick % 2 == 0 && aircraft.type === 'prop') {
-          continue;
-        }
-
-        const [newX, newY] = move(aircraft.x, aircraft.y, aircraft.heading);
-        aircraft.x = newX;
-        aircraft.y = newY;
-
-        const cell = map.grid[aircraft.y][aircraft.x];
-
-        // edge conditions
-        if (aircraft.x == 0 || aircraft.y == 0 || aircraft.x == map.x - 1 || aircraft.y == map.y - 1) {
-          if (cell.exit) {
-            if (aircraft.destination.id === cell.exit.id) {
-              if (aircraft.altitude != 9) {
-                game.failure = `${aircraftLabel(aircraft)} exited at ${aircraft.altitude * 1000}ft rather than 9000ft`;
-                continue loop;
-              }
-
-              aircrafts.splice(i, 1);
-              game.safe++;
-              break;
-            }
-            game.failure = `${aircraftLabel(aircraft)} exited at E${cell.exit.id} instead of E${
-              aircraft.destination.id
-            }`;
-            continue loop;
-          }
-
-          game.failure = `${aircraftLabel(aircraft)} exited at the wrong location`;
-          continue loop;
-        }
-
-        // airport conditions
-        if (aircraft.altitude === 0) {
-          if (!cell.airport) {
-            game.failure = `${aircraftLabel(aircraft)} crashed into the ground`;
-            continue loop;
-          }
-
-          if (!headingMatchesDirection(aircraft.heading, cell.airport.direction)) {
-            game.failure = `${aircraftLabel(aircraft)} crashed into airport (wrong direction)`;
-            continue loop;
-          }
-
-          if (aircraft.destination.id !== cell.airport.id) {
-            game.failure = `${aircraftLabel(aircraft)} landed at the wrong airport`;
-            continue loop;
-          }
-
-          aircrafts.splice(i, 1);
-          game.safe++;
-          break;
-        }
-
-        // crash conditions
-        for (let j = aircrafts.length - 1; j >= 0; --j) {
-          if (i == j) continue;
-          const other = aircrafts[j];
-          const tooClose = Math.abs(aircraft.altitude - other.altitude) <= 3;
-          if (aircraft.x === other.x && aircraft.y === other.y && tooClose) {
-            game.failure = `${aircraftLabel(aircraft)} collided with ${aircraftLabel(other)}`;
-            continue loop;
-          }
-        }
-      }
-
-      if (game.tick === 0) {
-        const aircraft = createAircraft(map, aircrafts);
-        if (aircraft) aircrafts.push(aircraft);
-      } else if (game.tick % Math.max(1, map.info.spawnRate - Math.floor(game.safe / 5)) === 0) {
-        const aircraft = createAircraft(map, aircrafts);
-        if (aircraft) aircrafts.push(aircraft);
-      }
-
-      game.tick++;
-      game.lastTick = Date.now();
-    }
-  } catch (err) {
-    ui.close();
-    console.error(err);
-    process.exit(1);
-  } finally {
-    ui.close();
-    console.log(`Game over! (${game.failure})`);
-    console.log(`time: ${game.tick} safe: ${game.safe}`);
-    process.exit(0);
-  }
+  const g = new Game(map);
+  g.run();
 }
