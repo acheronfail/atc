@@ -254,11 +254,11 @@ class Terminal {
         aircraft.destination.type === 'airport' ? `A${aircraft.destination.id}` : `E${aircraft.destination.id}`;
       process.stdout.write(`${aircraftLabel(aircraft)} ${label}`);
 
-      if (aircraft.command.altitude) {
+      if (aircraft.command.altitude !== undefined) {
         process.stdout.write(` alt -> ${aircraft.command.altitude}`);
       }
 
-      if (aircraft.command.turn) {
+      if (aircraft.command.turn !== undefined) {
         process.stdout.write(` dir -> ${headingNameMap[aircraft.command.turn]}`);
       }
     });
@@ -528,7 +528,7 @@ class Game {
     this.aircrafts.forEach((aircraft) => {
       const { command } = aircraft;
 
-      if (command.altitude) {
+      if (command.altitude !== undefined) {
         if (command.altitude < aircraft.altitude) {
           aircraft.altitude--;
         } else if (command.altitude > aircraft.altitude) {
