@@ -1,3 +1,4 @@
+import * as fs from 'node:fs';
 import * as process from 'node:process';
 import * as assert from 'node:assert';
 import { crayon } from 'https://deno.land/x/crayon@3.3.3/mod.ts';
@@ -11,6 +12,7 @@ enum Direction {
 }
 
 enum Heading {
+  Turning = '?',
   North = 'w',
   NorthEast = 'e',
   East = 'd',
@@ -22,6 +24,7 @@ enum Heading {
 }
 
 const headingNameMap: Record<Heading, string> = {
+  [Heading.Turning]: 'Turning',
   [Heading.North]: 'North',
   [Heading.NorthEast]: 'NorthEast',
   [Heading.East]: 'East',
@@ -39,6 +42,7 @@ interface AircraftBase {
   altitude: number;
   heading: Heading;
   destination: { type: 'airport'; id: number } | { type: 'exit'; id: number };
+  command?: { type: 'turn'; heading: Heading } | { type: 'altitude'; altitude: number };
 }
 type Aircraft = (AircraftBase & { type: 'prop' }) | (AircraftBase & { type: 'jet' });
 
@@ -57,7 +61,7 @@ interface Game {
   safe: number;
   command: Command;
   lastTick: number;
-  map: Map;
+  map: GameMap;
   failure?: string;
 }
 
@@ -168,7 +172,7 @@ class Terminal {
     process.stdout.cursorTo(0, 0);
   }
 
-  draw(grid: Map, aircrafts: Aircraft[]) {
+  draw(grid: GameMap, aircrafts: Aircraft[]) {
     const { rows, columns } = process.stdout;
 
     assert.ok(rows + 3 >= grid.y, 'terminal needs more rows');
@@ -255,7 +259,7 @@ class Terminal {
 // utils
 //
 
-function getBaseMapChar(grid: Map, x: number, y: number) {
+function getBaseMapChar(grid: GameMap, x: number, y: number) {
   if (y == 0 || y == grid.y - 1) return '-';
   if (x == 0 || x == grid.x - 1) return '|';
   return '.';
@@ -298,7 +302,7 @@ interface Item {
   airport?: { id: number; direction: Direction };
 }
 
-interface Map {
+interface GameMap {
   x: number;
   y: number;
   info: MapInfo;
@@ -315,7 +319,7 @@ interface MapInfo {
 }
 
 const alpha = new Set([...'abcdefghijklmnopqrstuvwxyz']);
-function createAircraft(map: Map, aircrafts: Aircraft[]): Aircraft | null {
+function createAircraft(map: GameMap, aircrafts: Aircraft[]): Aircraft | null {
   const id = Array.from(alpha.difference(new Set(aircrafts.map((a) => a.id))))[0];
   const exit = random(
     map.info.exits.filter((exit) => !aircrafts.some((a) => Math.abs(a.x - exit[0]) < 3 && Math.abs(a.y - exit[1]) < 3))
@@ -340,7 +344,7 @@ function createAircraft(map: Map, aircrafts: Aircraft[]): Aircraft | null {
 }
 
 function createMap(x: number, y: number, info: MapInfo) {
-  const map: Map = { x, y, grid: [], info };
+  const map: GameMap = { x, y, grid: [], info };
   for (let i = 0; i < y; ++i) {
     const row: Item[] = [];
     for (let j = 0; j < x; ++j) {
@@ -397,18 +401,18 @@ function move(x: number, y: number, heading: Heading): [number, number] {
       return [--x, y];
     case Heading.NorthWest:
       return [--x, --y];
+    case Heading.Turning:
+      return [x, y];
   }
 }
 
 //
 // game
 //
-
 {
-  const mapInfo = JSON.parse(new TextDecoder().decode(Deno.readFileSync('map.json')));
+  const mapInfo = JSON.parse(fs.readFileSync('map.json', 'utf-8'));
   const map = createMap(30, 21, mapInfo);
 
-  // TODO: spawn random aircrafts (from exits, along paths) increasingly
   const aircrafts: Aircraft[] = [];
 
   // TODO: re-factor so ui can be swapped out
@@ -424,6 +428,7 @@ function move(x: number, y: number, heading: Heading): [number, number] {
         break loop;
       }
 
+      // handle input
       switch (event.type) {
         case 'draw':
           continue loop;
@@ -433,20 +438,19 @@ function move(x: number, y: number, heading: Heading): [number, number] {
         case 'tick':
           break;
         case 'send': {
-          // TODO: handle delays in commands?
           const [aircraftId, cmd, cmdData] = game.command;
           game.command = [];
-          assert.ok(cmdData, 'unexpected partial game command');
+          assert.ok(cmd && cmdData, 'unexpected partial game command');
 
           const aircraft = aircrafts.find((a) => a.id === aircraftId);
           if (!aircraft) break;
 
           switch (cmd) {
             case 'altitude':
-              aircraft.altitude = cmdData.altitude;
+              aircraft.command = { type: 'altitude', altitude: cmdData.altitude };
               break;
             case 'turn':
-              aircraft.heading = cmdData.heading;
+              aircraft.command = { type: 'turn', heading: cmdData.heading };
               break;
           }
 
@@ -455,6 +459,64 @@ function move(x: number, y: number, heading: Heading): [number, number] {
         default:
           throw new Error(`Unrecognised input: ${JSON.stringify(event)}`);
       }
+
+      // update game state
+      aircrafts.forEach((aircraft) => {
+        const { command } = aircraft;
+        if (!command) return;
+
+        if (command.type === 'altitude') {
+          if (command.altitude < aircraft.altitude) {
+            aircraft.altitude--;
+          } else if (command.altitude > aircraft.altitude) {
+            aircraft.altitude++;
+          }
+
+          if (command.altitude === aircraft.altitude) {
+            delete aircraft.command;
+          }
+        }
+
+        const headingsAsPoints: Record<Heading, () => [number, number]> = {
+          [Heading.Turning]: () => [0, 0],
+          [Heading.North]: () => [0, -1],
+          [Heading.NorthEast]: () => [1, -1],
+          [Heading.East]: () => [1, 0],
+          [Heading.SouthEast]: () => [1, 1],
+          [Heading.South]: () => [0, 1],
+          [Heading.SouthWest]: () => [-1, 1],
+          [Heading.West]: () => [-1, 0],
+          [Heading.NorthWest]: () => [-1, -1],
+        };
+
+        function headingFromPoint(x: number, y: number): Heading {
+          for (const [heading, getPoint] of Object.entries(headingsAsPoints)) {
+            const point = getPoint();
+            if (point[0] === x && point[1] === y) {
+              return heading as Heading;
+            }
+          }
+
+          assert.fail(`failed to find heading from point: ${x}, ${y}`);
+        }
+
+        if (command.type === 'turn') {
+          const current = headingsAsPoints[aircraft.heading]();
+          const target = headingsAsPoints[command.heading]();
+
+          // TODO: should it stay in the same spot while rotating?
+          if (current[0] < target[0]) current[0]++;
+          if (current[0] > target[0]) current[0]--;
+          if (current[1] < target[1]) current[1]++;
+          if (current[1] > target[1]) current[1]--;
+
+          const h = headingFromPoint(...current);
+          aircraft.heading = h;
+          if (aircraft.heading === command.heading) {
+            delete aircraft.command;
+          }
+        }
+      });
 
       // update aircrafts
       for (let i = aircrafts.length - 1; i >= 0; --i) {
