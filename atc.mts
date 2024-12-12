@@ -542,7 +542,7 @@ class Game {
 
       // NOTE: if planes are near the wall, and you ask them to do a 180 degree turn, they can
       // turn straight into the wall and crash; this happens in the original `atc`, too
-      if (command.turn) {
+      if (command.turn !== undefined) {
         const cwTurns = (command.turn - aircraft.heading + headingCount) % headingCount;
         const ccwTurns = (aircraft.heading - command.turn + headingCount) % headingCount;
 
