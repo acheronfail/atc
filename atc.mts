@@ -406,6 +406,29 @@ function move(x: number, y: number, heading: Heading): [number, number] {
   }
 }
 
+const headingsAsPoints: Record<Heading, () => [number, number]> = {
+  [Heading.Turning]: () => [0, 0],
+  [Heading.North]: () => [0, -1],
+  [Heading.NorthEast]: () => [1, -1],
+  [Heading.East]: () => [1, 0],
+  [Heading.SouthEast]: () => [1, 1],
+  [Heading.South]: () => [0, 1],
+  [Heading.SouthWest]: () => [-1, 1],
+  [Heading.West]: () => [-1, 0],
+  [Heading.NorthWest]: () => [-1, -1],
+};
+
+function headingFromPoint(x: number, y: number): Heading {
+  for (const [heading, getPoint] of Object.entries(headingsAsPoints)) {
+    const point = getPoint();
+    if (point[0] === x && point[1] === y) {
+      return heading as Heading;
+    }
+  }
+
+  assert.fail(`failed to find heading from point: ${x}, ${y}`);
+}
+
 //
 // game
 //
@@ -454,7 +477,7 @@ function move(x: number, y: number, heading: Heading): [number, number] {
               break;
           }
 
-          break;
+          continue loop;
         }
         default:
           throw new Error(`Unrecognised input: ${JSON.stringify(event)}`);
@@ -475,29 +498,6 @@ function move(x: number, y: number, heading: Heading): [number, number] {
           if (command.altitude === aircraft.altitude) {
             delete aircraft.command;
           }
-        }
-
-        const headingsAsPoints: Record<Heading, () => [number, number]> = {
-          [Heading.Turning]: () => [0, 0],
-          [Heading.North]: () => [0, -1],
-          [Heading.NorthEast]: () => [1, -1],
-          [Heading.East]: () => [1, 0],
-          [Heading.SouthEast]: () => [1, 1],
-          [Heading.South]: () => [0, 1],
-          [Heading.SouthWest]: () => [-1, 1],
-          [Heading.West]: () => [-1, 0],
-          [Heading.NorthWest]: () => [-1, -1],
-        };
-
-        function headingFromPoint(x: number, y: number): Heading {
-          for (const [heading, getPoint] of Object.entries(headingsAsPoints)) {
-            const point = getPoint();
-            if (point[0] === x && point[1] === y) {
-              return heading as Heading;
-            }
-          }
-
-          assert.fail(`failed to find heading from point: ${x}, ${y}`);
         }
 
         if (command.type === 'turn') {
@@ -532,9 +532,14 @@ function move(x: number, y: number, heading: Heading): [number, number] {
         const cell = map.grid[aircraft.y][aircraft.x];
 
         // edge conditions
-        if (aircraft.x == 0 || aircraft.y == 0) {
+        if (aircraft.x == 0 || aircraft.y == 0 || aircraft.x == map.x - 1 || aircraft.y == map.y - 1) {
           if (cell.exit) {
             if (aircraft.destination.id === cell.exit.id) {
+              if (aircraft.altitude != 9) {
+                game.failure = `${aircraftLabel(aircraft)} exited at ${aircraft.altitude * 1000}ft rather than 9000ft`;
+                continue loop;
+              }
+
               aircrafts.splice(i, 1);
               game.safe++;
               break;
