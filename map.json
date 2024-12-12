@@ -1,6 +1,6 @@
 {
-  "tickRate": 2,
-  "spawnRate": 5,
+  "tickRate": 5,
+  "spawnRate": 10,
   "exits": [
     [12, 0, "x"],
     [29, 0, "z"],
