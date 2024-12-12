@@ -21,6 +21,7 @@ enum Heading {
   West,
   NorthWest,
 }
+const headingCount = Object.values(Heading).length;
 
 const headingToCharacter: Record<Heading, string> = {
   [Heading.North]: 'w',
@@ -497,10 +498,8 @@ function move(x: number, y: number, heading: Heading): [number, number] {
         // NOTE: if planes are near the wall, and you ask them to do a 180 degree turn, they can
         // turn straight into the wall and crash; this happens in the original `atc`, too
         if (command.turn) {
-          const allHeadings = Object.values(Heading);
-
-          const cwTurns = (command.turn - aircraft.heading + allHeadings.length) % allHeadings.length; // 3
-          const ccwTurns = (aircraft.heading - command.turn + allHeadings.length) % allHeadings.length; // 5
+          const cwTurns = (command.turn - aircraft.heading + headingCount) % headingCount;
+          const ccwTurns = (aircraft.heading - command.turn + headingCount) % headingCount;
 
           aircraft.heading += ccwTurns < cwTurns ? Math.max(-2, -ccwTurns) : Math.min(2, cwTurns);
 
