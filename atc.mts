@@ -494,7 +494,8 @@ function move(x: number, y: number, heading: Heading): [number, number] {
           }
         }
 
-        // FIXME: don't let planes turn into the wall and crash
+        // NOTE: if planes are near the wall, and you ask them to do a 180 degree turn, they can
+        // turn straight into the wall and crash; this happens in the original `atc`, too
         if (command.turn) {
           const allHeadings = Object.values(Heading);
 
