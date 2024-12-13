@@ -27,13 +27,13 @@ export type Aircraft = PropAircraft | JetAircraft;
 
 const alpha = new Set([..."abcdefghijklmnopqrstuvwxyz"]);
 
-export function createAircraft(
-  map: GameMap,
-  aircrafts: Aircraft[],
-): Aircraft | null {
+export function createAircraft(map: GameMap, aircrafts: Aircraft[]): Aircraft | null {
   const id = Array.from(alpha.difference(new Set(aircrafts.map((a) => a.id))))[0];
   const exit = random(
-    map.info.exits.filter((exit) => !aircrafts.some((a) => Math.abs(a.x - exit[0]) < 3 && Math.abs(a.y - exit[1]) < 3)),
+    map.info.exits.filter((exit) => {
+      const hasAircraftClose = aircrafts.some((a) => Math.abs(a.x - exit[0]) < 3 && Math.abs(a.y - exit[1]) < 3);
+      return !hasAircraftClose;
+    }),
   );
 
   if (!id || !exit) return null;
@@ -46,7 +46,7 @@ export function createAircraft(
     altitude: 7,
     destination: random([true, false])
       ? { type: "airport", id: randomIndex(map.info.airports) }
-      : { type: "exit", id: randomIndex(map.info.exits) },
+      : { type: "exit", id: randomIndex(map.info.exits.filter((e) => e !== exit)) },
     x: exitX,
     y: exitY,
     command: {},
