@@ -1,4 +1,6 @@
 {
+  "width": 30,
+  "height": 21,
   "tickRate": 5,
   "spawnRate": 10,
   "exits": [
