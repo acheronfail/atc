@@ -31,14 +31,9 @@ export function createAircraft(
   map: GameMap,
   aircrafts: Aircraft[],
 ): Aircraft | null {
-  const id =
-    Array.from(alpha.difference(new Set(aircrafts.map((a) => a.id))))[0];
+  const id = Array.from(alpha.difference(new Set(aircrafts.map((a) => a.id))))[0];
   const exit = random(
-    map.info.exits.filter((exit) =>
-      !aircrafts.some((a) =>
-        Math.abs(a.x - exit[0]) < 3 && Math.abs(a.y - exit[1]) < 3
-      )
-    ),
+    map.info.exits.filter((exit) => !aircrafts.some((a) => Math.abs(a.x - exit[0]) < 3 && Math.abs(a.y - exit[1]) < 3)),
   );
 
   if (!id || !exit) return null;

@@ -15,7 +15,11 @@ export class TerminalUI implements UI {
   }
 
   close(error?: Error): void {
-    this.renderer?.close(error);
+    if (this.renderer) {
+      this.renderer?.close(error);
+    } else {
+      console.error(error);
+    }
   }
 }
 
@@ -30,8 +34,7 @@ export class TerminalRenderer implements Renderer {
 
     this.inputEvents = new EventEmitter();
     process.stdin.on("data", (char: string) => {
-      const sendInput = (input: GameEvent) =>
-        this.inputEvents.emit("input", input);
+      const sendInput = (input: GameEvent) => this.inputEvents.emit("input", input);
 
       const [aircraftId, cmd, cmdData] = this.state.command;
       switch (char) {
@@ -117,12 +120,8 @@ export class TerminalRenderer implements Renderer {
     const timeToNextTick = state.tickRate * 1000 -
       (Date.now() - state.lastTick);
     return Promise.race([
-      new Promise<GameEvent>((resolve) =>
-        setTimeout(() => resolve({ type: "tick" }), timeToNextTick)
-      ),
-      new Promise<GameEvent>((resolve) =>
-        this.inputEvents.once("input", resolve)
-      ),
+      new Promise<GameEvent>((resolve) => setTimeout(() => resolve({ type: "tick" }), timeToNextTick)),
+      new Promise<GameEvent>((resolve) => this.inputEvents.once("input", resolve)),
     ]);
   }
 

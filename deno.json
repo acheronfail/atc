@@ -1,0 +1,8 @@
+{
+  "tasks": {
+    "start": "deno run --allow-env --allow-read src/main.mts"
+  },
+  "fmt": {
+    "lineWidth": 120
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "version": "4",
+  "specifiers": {
+    "npm:@types/node@*": "22.5.4"
+  },
+  "npm": {
+    "@types/node@22.5.4": {
+      "integrity": "sha512-FDuKUJQm/ju9fT/SeX/6+gBzoPzlVCzfzmGkwKvRHQVxi4BntVbyIwf6a4Xn62mrvndLiml6z/UBXIdEVjQLXg==",
+      "dependencies": [
+        "undici-types"
+      ]
+    },
+    "undici-types@6.19.8": {
+      "integrity": "sha512-ve2KP6f/JnbPBFyobGHuerC9g1FYGn/F8n1LWTwNxCEzd6IfqTwUQcNXgEtmmQ6DlRrC1hrSrBnCZPokRrDHjw=="
+    }
+  },
+  "remote": {
+    "https://deno.land/x/crayon@3.3.3/mod.ts": "82ad225583a483c4837577971629cddaa22614093af8353da6426b9366de9780",
+    "https://deno.land/x/crayon@3.3.3/src/conversions.ts": "9bfd3b1fbe412bcba092890ac558b6beaad4c3aa399cd99d45fadb324d28afd6",
+    "https://deno.land/x/crayon@3.3.3/src/crayon.ts": "6b237baa08a31c903436e040afd2228a7fffaa5d11dddc58e3c402f79b3c1d04",
+    "https://deno.land/x/crayon@3.3.3/src/styles.ts": "aa588b57b2c0482dc5c6f53109b4287831a9827c0aeef9a88129beae1172c1ee",
+    "https://deno.land/x/crayon@3.3.3/src/util.ts": "af8884a917488de76ac0c2b92482093ade74514ece77a4c64e5eb5b0f6ed68e6"
+  }
+}

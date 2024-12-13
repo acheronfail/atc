@@ -2,9 +2,10 @@ import * as assert from "node:assert";
 import * as fs from "node:fs/promises";
 import { GameMap, Item, MapInfo } from "./types.ts";
 import { characterToHeading } from "./heading.ts";
+import path from "node:path";
 
-export async function readMap(path: string): Promise<GameMap> {
-  const info: MapInfo = JSON.parse(await fs.readFile(path, "utf-8"));
+export async function readMap(name: string): Promise<GameMap> {
+  const info: MapInfo = JSON.parse(await fs.readFile(path.join("maps", `${name}.json`), "utf-8"));
   info.exits = info.exits.map(([x, y, headingChar]) => {
     if (typeof headingChar === "string") {
       return [x, y, characterToHeading[headingChar]];
@@ -30,10 +31,7 @@ function createMap(info: MapInfo) {
   for (const [[x1, y1], [x2, y2]] of info.paths) {
     let [x, y] = [x1, y1];
     for (;;) {
-      assert.ok(
-        x < map.x && y < map.y,
-        `[${x}, ${y}] out of bounds of Map[${map.x}, ${map.y}]`,
-      );
+      assert.ok(x < map.x && y < map.y, `[${x}, ${y}] out of bounds of Map[${map.x}, ${map.y}]`);
 
       map.grid[y][x].path = true;
       if (x == x2 && y == y2) break;
