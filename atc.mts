@@ -140,7 +140,7 @@ class Terminal {
       if (cmd && !cmdData) {
         if (cmd == 'turn') {
           const heading = characterToHeading[char];
-          if (heading) {
+          if (heading !== undefined) {
             this.state.command = [this.state.command[0], 'turn', { text: headingNameMap[heading], heading }];
           }
 
