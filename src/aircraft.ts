@@ -46,7 +46,7 @@ export function createAircraft(map: GameMap, aircrafts: Aircraft[]): Aircraft | 
     altitude: 7,
     destination: random([true, false])
       ? { type: "airport", id: randomIndex(map.info.airports) }
-      : { type: "exit", id: randomIndex(map.info.exits.filter((e) => e !== exit)) },
+      : { type: "exit", id: random(map.info.exits.map((e, i) => ({ e, i })).filter(({ e }) => e !== exit)).i },
     x: exitX,
     y: exitY,
     command: {},
