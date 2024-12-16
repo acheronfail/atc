@@ -1,8 +1,7 @@
 import * as assert from "node:assert";
 import { GameMap, GameState } from "./types.ts";
-import { aircraftLabel } from "./utils.ts";
-import { Heading, headingCount, headingMatchesDirection } from "./heading.ts";
-import { Aircraft, createAircraft } from "./aircraft.ts";
+import { headingMatchesDirection } from "./heading.ts";
+import { Aircraft } from "./aircraft.ts";
 import { UI } from "./ui/index.ts";
 
 export class Game {
@@ -66,8 +65,8 @@ export class Game {
           throw new Error(`Unrecognised input: ${JSON.stringify(event)}`);
       }
 
-      this.performAircraftCommands();
-      if (!this.updateAircraftPositions()) continue loop;
+      this.state.aircrafts.forEach((aircraft) => aircraft.performCommand(this.state.tick));
+      if (!this.moveAircraftsAndCheckCollisions()) continue loop;
       this.spawnAircrafts();
 
       this.state.tick++;
@@ -75,93 +74,24 @@ export class Game {
     }
   }
 
-  moveAircraft(aircraft: Aircraft) {
-    switch (aircraft.heading) {
-      case Heading.North:
-        aircraft.y--;
-        break;
-      case Heading.NorthEast:
-        aircraft.x++;
-        aircraft.y--;
-        break;
-      case Heading.East:
-        aircraft.x++;
-        break;
-      case Heading.SouthEast:
-        aircraft.x++;
-        aircraft.y++;
-        break;
-      case Heading.South:
-        aircraft.y++;
-        break;
-      case Heading.SouthWest:
-        aircraft.x--;
-        aircraft.y++;
-        break;
-      case Heading.West:
-        aircraft.x--;
-        break;
-      case Heading.NorthWest:
-        aircraft.x--;
-        aircraft.y--;
-        break;
-    }
-  }
-
   spawnAircrafts() {
     if (this.state.tick === 0) {
-      const aircraft = createAircraft(this.map, this.state.aircrafts);
+      const aircraft = Aircraft.create(this.map, this.state.aircrafts);
       if (aircraft) this.state.aircrafts.push(aircraft);
     } else if (this.state.tick % Math.max(1, this.map.info.spawnRate - Math.floor(this.state.safe / 5)) === 0) {
-      const aircraft = createAircraft(this.map, this.state.aircrafts);
+      const aircraft = Aircraft.create(this.map, this.state.aircrafts);
       if (aircraft) this.state.aircrafts.push(aircraft);
     }
   }
 
-  performAircraftCommands() {
-    this.state.aircrafts.forEach((aircraft) => {
-      if (this.state.tick % 2 == 0 && aircraft.type === "prop") {
-        return;
-      }
-
-      const { command } = aircraft;
-
-      if (command.altitude !== undefined) {
-        if (command.altitude < aircraft.altitude) {
-          aircraft.altitude--;
-        } else if (command.altitude > aircraft.altitude) {
-          aircraft.altitude++;
-        }
-
-        if (command.altitude === aircraft.altitude) {
-          delete aircraft.command.altitude;
-        }
-      }
-
-      // NOTE: if planes are near the wall, and you ask them to do a 180 degree turn, they can
-      // turn straight into the wall and crash; this happens in the original `atc`, too
-      if (command.turn !== undefined) {
-        const cwTurns = (command.turn - aircraft.heading + headingCount) % headingCount;
-        const ccwTurns = (aircraft.heading - command.turn + headingCount) % headingCount;
-
-        const nextHeading = aircraft.heading + (ccwTurns < cwTurns ? Math.max(-2, -ccwTurns) : Math.min(2, cwTurns));
-        aircraft.heading = nextHeading % headingCount;
-
-        if (aircraft.heading === command.turn) {
-          delete aircraft.command.turn;
-        }
-      }
-    });
-  }
-
-  updateAircraftPositions(): boolean {
+  moveAircraftsAndCheckCollisions(): boolean {
     for (let i = this.state.aircrafts.length - 1; i >= 0; --i) {
       const aircraft = this.state.aircrafts[i];
-      if (this.state.tick % 2 == 0 && aircraft.type === "prop") {
+      if (!aircraft.shouldUpdate(this.state.tick)) {
         continue;
       }
 
-      this.moveAircraft(aircraft);
+      aircraft.move();
 
       const cell = this.map.grid[aircraft.y][aircraft.x];
 
@@ -170,9 +100,7 @@ export class Game {
         if (cell.exit) {
           if (aircraft.destination.id === cell.exit.id) {
             if (aircraft.altitude != 9) {
-              this.state.failure = `${aircraftLabel(aircraft)} exited at ${
-                aircraft.altitude * 1000
-              }ft rather than 9000ft`;
+              this.state.failure = `${aircraft.label()} exited at ${aircraft.altitude * 1000}ft rather than 9000ft`;
               return false;
             }
 
@@ -180,30 +108,28 @@ export class Game {
             this.state.safe++;
             break;
           }
-          this.state.failure = `${
-            aircraftLabel(aircraft)
-          } exited at E${cell.exit.id} instead of E${aircraft.destination.id}`;
+          this.state.failure = `${aircraft.label()} exited at E${cell.exit.id} instead of E${aircraft.destination.id}`;
           return false;
         }
 
-        this.state.failure = `${aircraftLabel(aircraft)} exited at the wrong location`;
+        this.state.failure = `${aircraft.label()} exited at the wrong location`;
         return false;
       }
 
       // airport conditions
       if (aircraft.altitude === 0) {
         if (!cell.airport) {
-          this.state.failure = `${aircraftLabel(aircraft)} crashed into the ground`;
+          this.state.failure = `${aircraft.label()} crashed into the ground`;
           return false;
         }
 
         if (!headingMatchesDirection(aircraft.heading, cell.airport.direction)) {
-          this.state.failure = `${aircraftLabel(aircraft)} crashed into airport (wrong direction)`;
+          this.state.failure = `${aircraft.label()} crashed into airport (wrong direction)`;
           return false;
         }
 
         if (aircraft.destination.id !== cell.airport.id) {
-          this.state.failure = `${aircraftLabel(aircraft)} landed at the wrong airport`;
+          this.state.failure = `${aircraft.label()} landed at the wrong airport`;
           return false;
         }
 
@@ -218,7 +144,7 @@ export class Game {
         const other = this.state.aircrafts[j];
         const tooClose = Math.abs(aircraft.altitude - other.altitude) <= 3;
         if (aircraft.x === other.x && aircraft.y === other.y && tooClose) {
-          this.state.failure = `${aircraftLabel(aircraft)} collided with ${aircraftLabel(other)}`;
+          this.state.failure = `${aircraft.label()} collided with ${other.label()}`;
           return false;
         }
       }

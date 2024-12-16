@@ -1,10 +1,3 @@
-import { Aircraft } from "./aircraft.ts";
-
-export function aircraftLabel({ type, id, altitude }: Aircraft) {
-  const label = type === "prop" ? id.toUpperCase() : id.toLowerCase();
-  return `${label}${altitude}`;
-}
-
 export function randomIndex(arr: unknown[]): number {
   return Math.floor(Math.random() * arr.length);
 }

@@ -5,7 +5,7 @@ export enum Direction {
   Right = ">",
 }
 
-export const headingCount = 8;
+export const HEADING_COUNT = 8;
 export enum Heading {
   North,
   NorthEast,

@@ -3,7 +3,6 @@ import * as process from "node:process";
 import EventEmitter from "node:events";
 import { crayon } from "https://deno.land/x/crayon@3.3.3/mod.ts";
 import { GameEvent, GameMap, GameState } from "../types.ts";
-import { aircraftLabel } from "../utils.ts";
 import { characterToHeading, headingNameMap } from "../heading.ts";
 import { Renderer, UI } from "./index.ts";
 
@@ -185,7 +184,7 @@ export class TerminalRenderer implements Renderer {
     this.state.aircrafts.forEach((aircraft) => {
       const { x, y } = aircraft;
       process.stdout.cursorTo(x * xScale - 1, y);
-      process.stdout.write(crayon.bgWhite.black(aircraftLabel(aircraft)));
+      process.stdout.write(crayon.bgWhite.black(aircraft.label()));
     });
 
     // sidebar
@@ -201,7 +200,7 @@ export class TerminalRenderer implements Renderer {
       const label = aircraft.destination.type === "airport"
         ? `A${aircraft.destination.id}`
         : `E${aircraft.destination.id}`;
-      process.stdout.write(`${aircraftLabel(aircraft)} ${label}`);
+      process.stdout.write(`${aircraft.label()} ${label}`);
 
       if (aircraft.command.altitude !== undefined) {
         process.stdout.write(` alt -> ${aircraft.command.altitude}`);
