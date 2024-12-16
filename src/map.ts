@@ -4,8 +4,17 @@ import { GameMap, Item, MapInfo } from "./types.ts";
 import { characterToHeading } from "./heading.ts";
 import path from "node:path";
 
+const MAP_DIR = path.resolve("maps");
+
+export async function listMaps(): Promise<string[]> {
+  const files = await fs.readdir(MAP_DIR);
+  return files.map((file) => path.basename(file, ".json")).sort();
+}
+
 export async function readMap(name: string): Promise<GameMap> {
-  const info: MapInfo = JSON.parse(await fs.readFile(path.join("maps", `${name}.json`), "utf-8"));
+  const info: MapInfo = JSON.parse(await fs.readFile(path.join(MAP_DIR, `${name}.json`), "utf-8"));
+
+  // convert from original atc format
   info.exits = info.exits.map(([x, y, headingChar]) => {
     if (typeof headingChar === "string") {
       return [x, y, characterToHeading[headingChar]];
