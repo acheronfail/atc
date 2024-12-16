@@ -2,7 +2,7 @@ import { describe, test } from "jsr:@std/testing/bdd";
 import { expect } from "jsr:@std/expect";
 import { Aircraft } from "./aircraft.ts";
 import { readMap } from "./map.ts";
-import { Heading } from "./heading.ts";
+import { Heading, HEADING_COUNT } from "./heading.ts";
 
 const map = await readMap("default");
 
@@ -50,13 +50,17 @@ describe(Aircraft.name, () => {
       });
     }
 
-    testHeadingNavigation(Heading.North, Heading.North, [Heading.North]);
-    testHeadingNavigation(Heading.North, Heading.NorthEast, [Heading.NorthEast]);
-    testHeadingNavigation(Heading.North, Heading.East, [Heading.East]);
-    testHeadingNavigation(Heading.North, Heading.SouthEast, [Heading.East, Heading.SouthEast]);
-    testHeadingNavigation(Heading.North, Heading.South, [Heading.East, Heading.South]);
-    testHeadingNavigation(Heading.North, Heading.SouthWest, [Heading.West, Heading.SouthWest]);
-    testHeadingNavigation(Heading.North, Heading.West, [Heading.West]);
-    testHeadingNavigation(Heading.North, Heading.NorthWest, [Heading.NorthWest]);
+    for (let heading = 0; heading < HEADING_COUNT; heading++) {
+      const next = (n: number) => (heading + n) % HEADING_COUNT;
+
+      testHeadingNavigation(heading, heading, [heading]);
+      testHeadingNavigation(heading, next(1), [next(1)]);
+      testHeadingNavigation(heading, next(2), [next(2)]);
+      testHeadingNavigation(heading, next(3), [next(2), next(3)]);
+      testHeadingNavigation(heading, next(4), [next(2), next(4)]);
+      testHeadingNavigation(heading, next(5), [next(6), next(5)]);
+      testHeadingNavigation(heading, next(6), [next(6)]);
+      testHeadingNavigation(heading, next(7), [next(7)]);
+    }
   });
 });
