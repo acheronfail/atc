@@ -32,57 +32,67 @@ export class TerminalRenderer implements Renderer {
     process.stdin.setRawMode(true);
 
     this.inputEvents = new EventEmitter();
-    // TODO: support beacon commands!
     process.stdin.on("data", (char: string) => {
       const sendInput = (input: GameEvent) => this.inputEvents.emit("input", input);
+      const isFullCommand = (): boolean => {
+        const { aircraftId, altitude, turn } = this.state.command;
+        return Boolean(aircraftId && (altitude !== undefined || turn?.heading !== undefined));
+      };
 
-      const [aircraftId, cmd, cmdData] = this.state.command;
       switch (char) {
         case "\x03":
         case "\x04":
         case "\x1b":
           return sendInput({ type: "exit" });
         case "\r":
-          return sendInput({ type: cmdData ? "send" : "tick" });
+          return sendInput({ type: isFullCommand() ? "send" : "tick" });
         case "\x7f":
-          this.state.command.pop();
+          if (this.state.command.turn?.beacon !== undefined) {
+            delete this.state.command.turn.beacon;
+          } else if (this.state.command.turn?.heading !== undefined) {
+            delete this.state.command.turn.heading;
+          } else if (this.state.command.turn !== undefined) {
+            delete this.state.command.turn;
+          } else if (this.state.command.altitude?.value !== undefined) {
+            delete this.state.command.altitude.value;
+          } else if (this.state.command.altitude !== undefined) {
+            delete this.state.command.altitude;
+          } else if (this.state.command.aircraftId) {
+            delete this.state.command.aircraftId;
+          }
+
           return sendInput({ type: "draw" });
       }
 
-      if (!aircraftId) {
+      if (!this.state.command.aircraftId) {
         if (char.charCodeAt(0) >= 97 && char.charCodeAt(0) <= 122) {
-          this.state.command = [char];
-          return sendInput({ type: "draw" });
+          this.state.command.aircraftId = char;
         }
+
+        return sendInput({ type: "draw" });
       }
 
-      if (aircraftId && !cmd) {
+      if (
+        this.state.command.aircraftId && this.state.command.altitude === undefined &&
+        this.state.command.turn === undefined
+      ) {
         switch (char) {
           case "t":
-            this.state.command = [aircraftId, "turn"];
+            this.state.command.turn = {};
             break;
           case "a":
-            this.state.command = [aircraftId, "altitude"];
+            this.state.command.altitude = {};
             break;
         }
 
         return sendInput({ type: "draw" });
       }
 
-      if (cmd && !cmdData) {
-        if (cmd == "turn") {
-          const heading = characterToHeading[char];
-          if (heading !== undefined) {
-            this.state.command = [this.state.command[0], "turn", {
-              text: headingNameMap[heading],
-              heading,
-            }];
-          }
-
-          return sendInput({ type: "draw" });
-        }
-
-        if (cmd == "altitude") {
+      if (this.state.command.turn) {
+        const heading = characterToHeading[char];
+        if (heading !== undefined) {
+          this.state.command.turn = { heading };
+        } else {
           switch (char) {
             case "0":
             case "1":
@@ -94,16 +104,31 @@ export class TerminalRenderer implements Renderer {
             case "7":
             case "8":
             case "9": {
-              const altitude = parseInt(char);
-              this.state.command = [
-                this.state.command[0],
-                "altitude",
-                { text: (altitude * 1000).toString(), altitude },
-              ];
+              this.state.command.turn.beacon = parseInt(char);
             }
           }
-          return sendInput({ type: "draw" });
         }
+
+        return sendInput({ type: "draw" });
+      }
+
+      if (this.state.command.altitude) {
+        switch (char) {
+          case "0":
+          case "1":
+          case "2":
+          case "3":
+          case "4":
+          case "5":
+          case "6":
+          case "7":
+          case "8":
+          case "9": {
+            this.state.command.altitude = { value: parseInt(char) };
+          }
+        }
+
+        return sendInput({ type: "draw" });
       }
     });
   }
@@ -209,26 +234,40 @@ export class TerminalRenderer implements Renderer {
 
       if (aircraft.command.turn !== undefined) {
         process.stdout.write(
-          ` dir -> ${headingNameMap[aircraft.command.turn]}`,
+          ` dir -> ${headingNameMap[aircraft.command.turn.heading]}`,
         );
+        if (aircraft.command.turn.beacon !== undefined) {
+          process.stdout.write(` @${aircraft.command.turn.beacon}`);
+        }
       }
     });
 
     // input
     process.stdout.cursorTo(0, this.state.map.y + 1);
     process.stdout.write("> ");
-    const [aircraftId, cmd, cmdData] = this.state.command;
+    const { aircraftId, turn, altitude } = this.state.command;
     if (aircraftId) {
       const aircraft = this.state.aircrafts.find((a) => a.id === aircraftId);
       process.stdout.write(
         `${crayon[aircraft ? "green" : "red"](aircraftId)}: `,
       );
     }
-    if (cmd) {
-      process.stdout.write(`${cmd}: `);
+    if (turn) {
+      process.stdout.write(`turn: `);
+
+      if (turn.heading !== undefined) {
+        process.stdout.write(`to ${headingNameMap[turn.heading]}`);
+      }
+      if (turn.beacon !== undefined) {
+        const beaconExists = turn.beacon < this.state.map.info.beacons.length;
+        process.stdout.write(` at beacon ${crayon[beaconExists ? "green" : "red"](`#${turn.beacon}`)}`);
+      }
     }
-    if (cmdData) {
-      process.stdout.write(cmdData.text);
+    if (altitude) {
+      process.stdout.write(`altitude: `);
+      if (altitude.value) {
+        process.stdout.write(`${altitude.value * 1000} ft`);
+      }
     }
 
     if (state.failure) {

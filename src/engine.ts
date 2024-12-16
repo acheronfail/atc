@@ -13,7 +13,7 @@ export class Game {
     this.state = {
       tick: 0,
       safe: 0,
-      command: [],
+      command: {},
       lastTick: Date.now(),
       tickRate: map.info.tickRate,
       map,
@@ -43,20 +43,22 @@ export class Game {
         case "tick":
           break;
         case "send": {
-          const [aircraftId, cmd, cmdData] = this.state.command;
-          this.state.command = [];
-          assert.ok(cmd && cmdData, "unexpected partial game command");
+          const { aircraftId, altitude, turn } = this.state.command;
+          this.state.command = {};
+
+          assert.ok(
+            aircraftId && (altitude !== undefined || turn?.heading !== undefined),
+            "unexpected partial game command",
+          );
 
           const aircraft = this.state.aircrafts.find((a) => a.id === aircraftId);
           if (!aircraft) break;
 
-          switch (cmd) {
-            case "altitude":
-              aircraft.command.altitude = cmdData.altitude;
-              break;
-            case "turn":
-              aircraft.command.turn = cmdData.heading;
-              break;
+          if (altitude?.value !== undefined) {
+            aircraft.command.altitude = altitude.value;
+          }
+          if (turn?.heading !== undefined) {
+            aircraft.command.turn = { heading: turn.heading, beacon: turn.beacon };
           }
 
           continue loop;
@@ -65,7 +67,7 @@ export class Game {
           throw new Error(`Unrecognised input: ${JSON.stringify(event)}`);
       }
 
-      this.state.aircrafts.forEach((aircraft) => aircraft.performCommand(this.state.tick));
+      this.state.aircrafts.forEach((aircraft) => aircraft.performCommand(this.state.tick, this.state.map));
       if (!this.moveAircraftsAndCheckCollisions()) continue loop;
       this.spawnAircrafts();
 

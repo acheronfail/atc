@@ -23,17 +23,17 @@ describe(Aircraft.name, () => {
       expect(aircraft.altitude).toBe(7);
 
       aircraft.command = { altitude: 1 };
-      aircraft.performCommand(0);
+      aircraft.performCommand(0, map);
       expect(aircraft.altitude).toBe(6);
-      aircraft.performCommand(0);
+      aircraft.performCommand(0, map);
       expect(aircraft.altitude).toBe(5);
-      aircraft.performCommand(0);
+      aircraft.performCommand(0, map);
       expect(aircraft.altitude).toBe(4);
-      aircraft.performCommand(0);
+      aircraft.performCommand(0, map);
       expect(aircraft.altitude).toBe(3);
-      aircraft.performCommand(0);
+      aircraft.performCommand(0, map);
       expect(aircraft.altitude).toBe(2);
-      aircraft.performCommand(0);
+      aircraft.performCommand(0, map);
       expect(aircraft.altitude).toBe(1);
     });
 
@@ -41,10 +41,10 @@ describe(Aircraft.name, () => {
       test(`heading: ${Heading[start]} -> ${Heading[end]}`, () => {
         const aircraft = Aircraft.create(map, [], TestAircraft)!;
         aircraft.heading = start;
-        aircraft.command = { turn: end };
+        aircraft.command = { turn: { heading: end } };
 
         for (const heading of expected) {
-          aircraft.performCommand(0);
+          aircraft.performCommand(0, map);
           expect(aircraft.heading).toBe(heading);
         }
       });

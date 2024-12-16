@@ -7,13 +7,16 @@ export type GameEvent =
   | { type: "send" }
   | { type: "draw" };
 
-type Command =
-  | []
-  | [string /* aircraft id */]
-  | [string, /* aircraft id */ "turn"]
-  | [string, /* aircraft id */ "turn", { heading: Heading; text: string }]
-  | [string, /* aircraft id */ "altitude"]
-  | [string, /* aircraft id */ "altitude", { altitude: number; text: string }];
+interface Command {
+  aircraftId?: string;
+  turn?: {
+    heading?: Heading;
+    beacon?: number;
+  };
+  altitude?: {
+    value?: number;
+  };
+}
 
 export interface GameState {
   failure?: string;
