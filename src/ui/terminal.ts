@@ -32,6 +32,7 @@ export class TerminalRenderer implements Renderer {
     process.stdin.setRawMode(true);
 
     this.inputEvents = new EventEmitter();
+    // TODO: support beacon commands!
     process.stdin.on("data", (char: string) => {
       const sendInput = (input: GameEvent) => this.inputEvents.emit("input", input);
 

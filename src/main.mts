@@ -3,6 +3,9 @@ import { Game } from "./engine.ts";
 import { readMap } from "./map.ts";
 import { TerminalUI } from "./ui/terminal.ts";
 
+// TODO: cli argument parsing (choose map, etc)
+// TODO: a description of how to play might be nice?
+
 const ui = new TerminalUI();
 try {
   const map = await readMap("default");
