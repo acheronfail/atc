@@ -103,7 +103,6 @@ export abstract class Aircraft {
     // NOTE: if planes are near the wall, and you ask them to do a 180 degree turn, they can
     // turn straight into the wall and crash; this happens in the original `atc`, too
     if (command.turn !== undefined) {
-      // FIXME: there is a bug here, where the plane can get stuck and not turn
       const cwTurns = (command.turn - this.heading + HEADING_COUNT) % HEADING_COUNT;
       const ccwTurns = (this.heading - command.turn + HEADING_COUNT) % HEADING_COUNT;
 
