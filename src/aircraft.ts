@@ -119,7 +119,7 @@ export abstract class Aircraft {
 
 class Jet extends Aircraft {
   label(): string {
-    return this.id.toUpperCase() + this.altitude;
+    return this.id.toLowerCase() + this.altitude;
   }
 
   shouldUpdate(_: number): boolean {
@@ -129,7 +129,7 @@ class Jet extends Aircraft {
 
 class Prop extends Aircraft {
   label(): string {
-    return this.id.toLowerCase() + this.altitude;
+    return this.id.toUpperCase() + this.altitude;
   }
 
   shouldUpdate(tick: number): boolean {
