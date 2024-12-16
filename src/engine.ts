@@ -144,7 +144,7 @@ export class Game {
       for (let j = this.state.aircrafts.length - 1; j >= 0; --j) {
         if (i == j) continue;
         const other = this.state.aircrafts[j];
-        const tooClose = Math.abs(aircraft.altitude - other.altitude) <= 3;
+        const tooClose = Math.abs(aircraft.altitude - other.altitude) < 2;
         if (aircraft.x === other.x && aircraft.y === other.y && tooClose) {
           this.state.failure = `${aircraft.label()} collided with ${other.label()}`;
           return false;
